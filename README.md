@@ -1,8 +1,9 @@
 # music-android
 
-The Android version of [music-tui](../music-tui): your music, Spotify playlists,
-internet radio and podcasts in one app with a bottom navigation bar, built with
-Material 3 Expressive.
+> The Android companion to **[music-tui](https://github.com/adelmonte/music-tui)**, the terminal music player.
+
+Your music, Spotify playlists, internet radio and podcasts in one app with a
+bottom navigation bar, built with Material 3 Expressive.
 
 ## What it does
 
@@ -21,6 +22,14 @@ Material 3 Expressive.
   yellow by default); four palette styles; pure black; and a now-playing screen
   colored from the cover.
 
+## Install
+
+Download `music-android-<version>.apk` from the
+[latest release](https://github.com/adelmonte/music-android/releases/latest)
+and open it on the phone (Android 10 or newer), or install it over USB:
+
+    adb install -r music-android-<version>.apk
+
 ## Where music goes
 
 Saved songs are ordinary files in the shared Music folder, where any player and
@@ -33,7 +42,7 @@ subscriptions, the queue) is JSON in the app's private storage.
 
 ## How it works without the desktop's tools
 
-music-tui relies on yt-dlp and ffmpeg. Here:
+[music-tui](https://github.com/adelmonte/music-tui) relies on yt-dlp and ffmpeg. Here:
 
 - [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) finds
   YouTube audio, in place of yt-dlp.
