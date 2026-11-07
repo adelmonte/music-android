@@ -1,6 +1,7 @@
 # music-android
 
 > The Android companion to **[music-tui](https://github.com/adelmonte/music-tui)**, the terminal music player.
+> On Kodi: **[music-kodi](https://github.com/adelmonte/music-kodi)**.
 
 Your music, Spotify playlists, internet radio and podcasts in one app with a
 bottom navigation bar, built with Material 3 Expressive.
