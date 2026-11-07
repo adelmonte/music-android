@@ -1,0 +1,4 @@
+<resources>
+    <!-- Phonograph's launcher icon background. -->
+    <color name="ic_launcher_background">#E0E0E0</color>
+</resources>
