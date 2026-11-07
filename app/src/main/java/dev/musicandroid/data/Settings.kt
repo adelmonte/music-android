@@ -23,6 +23,9 @@ data class Settings(
     /** Under the shared Music folder. */
     val downloadFolder: String = "music-android",
     val spotifyLinks: List<String> = emptyList(),
+    /** A `music-tui serve` server, like http://192.168.1.50:7700, and this user's key there. */
+    val syncServer: String = "",
+    val syncKey: String = "",
 )
 
 val PALETTE_STYLES = listOf("TonalSpot", "Vibrant", "Expressive", "Fidelity", "Content", "Rainbow", "FruitSalad", "Monochrome", "Neutral")

@@ -21,6 +21,7 @@ import dev.musicandroid.net.Podcasts
 import dev.musicandroid.net.RadioBrowser
 import dev.musicandroid.net.Matcher
 import dev.musicandroid.net.Spotify
+import dev.musicandroid.net.Sync
 import dev.musicandroid.playback.Connection
 import dev.musicandroid.playback.PlaybackService
 import kotlinx.coroutines.Dispatchers
@@ -248,6 +249,11 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             importing.value = false
             say(result)
         }
+    }
+
+    /** Settings → Sync → Status: try the server now. */
+    fun checkSync() {
+        viewModelScope.launch { io { Sync.pull() } }
     }
 
     fun linkPlaylist(link: String) {

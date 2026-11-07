@@ -37,6 +37,7 @@ import dev.musicandroid.net.Deezer
 import dev.musicandroid.net.Http
 import dev.musicandroid.net.Matcher
 import dev.musicandroid.net.RadioBrowser
+import dev.musicandroid.net.Sync
 import dev.musicandroid.net.YouTube
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -145,6 +146,7 @@ class PlaybackService : MediaLibraryService() {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         session = MediaLibrarySession.Builder(this, player, callback).setSessionActivity(open).build()
         restore()
+        pull()
         scope.launch {
             Store.settings.map { it.podcastSpeed }.distinctUntilChanged().collect { applySpeed() }
         }
@@ -240,20 +242,75 @@ class PlaybackService : MediaLibraryService() {
 
     private fun queue(): List<Track> = (0 until player.mediaItemCount).map { track(player.getMediaItemAt(it)) }
 
+    /** What playback looked like when last saved, to tell a real change from a periodic save. */
+    private data class Snapshot(val keys: Int, val index: Int, val positionMs: Long, val playing: Boolean)
+
+    private var last: Snapshot? = null
+    private var updated = 0L
+    private var pushedAt = 0L
+
+    private fun snapshot() = Snapshot(
+        (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }.hashCode(),
+        player.currentMediaItemIndex, player.currentPosition.coerceAtLeast(0), player.isPlaying,
+    )
+
     private fun save() {
         if (player.mediaItemCount == 0) return
-        Store.saveSession(Session(queue(), player.currentMediaItemIndex, player.currentPosition.coerceAtLeast(0)))
+        val now = snapshot()
+        val was = last
+        val changed = was == null || now.keys != was.keys || now.index != was.index || now.playing != was.playing ||
+            (!now.playing && kotlin.math.abs(now.positionMs - was.positionMs) > 2_000) ||
+            (now.playing && System.currentTimeMillis() - pushedAt >= 30_000)
+        val q = queue()
+        if (changed) {
+            last = now
+            updated = System.currentTimeMillis()
+            if (Sync.enabled) {
+                pushedAt = updated
+                val r = Sync.record(q, now.index, now.positionMs, updated)
+                // A thread, not the scope: the last save comes as the service is torn down.
+                Thread { Sync.push(r) }.start()
+            }
+        }
+        Store.saveSession(Session(q, now.index, now.positionMs, updated))
     }
 
     private fun restore() {
         val s = Store.loadSession()
+        updated = s.updated
         if (s.queue.isEmpty()) return
         Store.remember(s.queue)
         player.setMediaItems(s.queue.map(::item), s.index.coerceIn(0, s.queue.size - 1), s.positionMs)
         player.prepare()
+        last = snapshot()
+    }
+
+    private var pulling = false
+
+    /** Take the server's record when another device played since this one did and nothing is playing here. */
+    private fun pull() {
+        if (!Sync.enabled || pulling) return
+        pulling = true
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { Sync.pull() }
+            pulling = false
+            if (r == null || r.queue.isEmpty() || r.updated <= updated || r.device == Sync.device || player.isPlaying) return@launch
+            Store.remember(r.queue)
+            player.setMediaItems(r.queue.map(::item), r.index.coerceIn(0, r.queue.size - 1), r.positionMs)
+            player.prepare()
+            updated = r.updated
+            last = snapshot()
+            Store.saveSession(Session(r.queue, r.index, r.positionMs, updated))
+        }
     }
 
     private val callback = object : MediaLibrarySession.Callback {
+        // The app (or the system's player) opening: catch up with the other devices.
+        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
+            pull()
+            return super.onConnect(session, controller)
+        }
+
         // Items from a controller arrive without their URIs: rebuild them from the key.
         override fun onAddMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo, items: MutableList<MediaItem>): ListenableFuture<MutableList<MediaItem>> =
             Futures.immediateFuture(items.map { item(track(it)) }.toMutableList())

@@ -64,6 +64,7 @@ import dev.musicandroid.data.Playlist
 import dev.musicandroid.data.SEEDS
 import dev.musicandroid.data.Settings
 import dev.musicandroid.data.Store
+import dev.musicandroid.net.Sync
 import dev.musicandroid.ui.AppModel
 import dev.musicandroid.ui.Gutter
 import dev.musicandroid.ui.NameDialog
@@ -101,11 +102,16 @@ fun SettingsScreen(model: AppModel, bottom: PaddingValues) {
     var folder by remember { mutableStateOf(false) }
     var hex by remember { mutableStateOf(false) }
     var link by remember { mutableStateOf(false) }
+    var server by remember { mutableStateOf(false) }
+    var key by remember { mutableStateOf(false) }
+    val syncStatus by Sync.status.collectAsState()
     val set: ((Settings) -> Settings) -> Unit = { model.update(it) }
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { if (it.isNotEmpty()) model.importSpotify(it) }
     val tree = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { it?.let { u -> model.importSpotify(listOf(u), tree = true) } }
     val notify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     if (folder) NameDialog("Download folder", s.downloadFolder, { folder = false }, label = "Inside Music/") { v -> set { it.copy(downloadFolder = v.trim('/')) }; folder = false }
+    if (server) NameDialog("Sync server", s.syncServer.ifEmpty { "http://" }, { server = false }, label = "Address, like http://192.168.1.50:7700") { v -> set { it.copy(syncServer = v.trimEnd('/')) }; server = false }
+    if (key) NameDialog("Sync key", s.syncKey, { key = false }, label = "From music-tui serve add-user") { v -> set { it.copy(syncKey = v) }; key = false }
     if (link) NameDialog("Link a Spotify playlist", "", { link = false }, label = "Share link", confirm = "Link") { model.linkPlaylist(it); link = false }
     if (hex) NameDialog("Custom color", "#%06X".format(s.seed.toInt() and 0xFFFFFF), { hex = false }, label = "Hex, like #FFC107") { v ->
         runCatching { android.graphics.Color.parseColor(if (v.startsWith("#")) v else "#$v") }.getOrNull()?.let { c -> set { it.copy(seed = (c.toLong() and 0xFFFFFFFFL), dynamicColor = false) } }
@@ -179,6 +185,16 @@ fun SettingsScreen(model: AppModel, bottom: PaddingValues) {
                 Row(p.name, "Linked · ${p.tracks.size} songs", trailing = { IconButton(onClick = { model.unlink(p) }) { Icon(Icons.Rounded.Close, "Unlink") } })
             }
             item { Row("Link a playlist", "Keeps a Spotify playlist live (Release Radar, Discover Weekly); refreshed every launch, first 100 songs", trailing = { Icon(Icons.Rounded.Link, null) }, onClick = { link = true }) }
+        }
+
+        item { Group("Sync") }
+        item {
+            Row("Server", s.syncServer.ifEmpty { "Off. Pick up where music-tui or music-kodi stopped, through a music-tui serve server." }, onClick = { server = true },
+                trailing = if (s.syncServer.isNotEmpty()) { { IconButton(onClick = { set { it.copy(syncServer = "") } }) { Icon(Icons.Rounded.Close, "Turn off") } } } else null)
+        }
+        item { Row("Key", if (s.syncKey.isEmpty()) "Not set" else "••••" + s.syncKey.takeLast(4), onClick = { key = true }) }
+        if (s.syncServer.isNotEmpty() && s.syncKey.isNotEmpty()) item {
+            Row("Status", syncStatus ?: "Checks when the app opens and as you play", onClick = { model.checkSync() })
         }
 
         item { Group("Downloads") }

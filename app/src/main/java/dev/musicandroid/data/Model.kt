@@ -107,4 +107,10 @@ data class PodStore(
 data class SavedRadio(val title: String, val seed: String, val tracks: List<Track>)
 
 @Serializable
-data class Session(val queue: List<Track> = emptyList(), val index: Int = 0, val positionMs: Long = 0)
+data class Session(
+    val queue: List<Track> = emptyList(),
+    val index: Int = 0,
+    val positionMs: Long = 0,
+    /** When playback last changed here, or the synced record's time (ms). */
+    val updated: Long = 0,
+)

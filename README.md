@@ -31,6 +31,16 @@ and open it on the phone (Android 10 or newer), or install it over USB:
 
     adb install -r music-android-<version>.apk
 
+## Sync
+
+Pause on the phone and [music-tui](https://github.com/adelmonte/music-tui) or
+[music-kodi](https://github.com/adelmonte/music-kodi) opens at the same song and
+position, and the other way round. It goes through a `music-tui serve` server
+you run yourself (see [Sync in music-tui's
+README](https://github.com/adelmonte/music-tui#sync)). Enter its address and your
+key in *Settings → Sync*. Off by default. When the app opens and nothing is
+playing, it takes the newest queue, paused where it stopped.
+
 ## Where music goes
 
 Saved songs are ordinary files in the shared Music folder, where any player and
