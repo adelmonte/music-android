@@ -328,8 +328,23 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     // --- startup -------------------------------------------------------------
 
+    /** Covers for imported Spotify songs, a few at a time: each playlist's mosaic first, then the rest. */
+    private fun fillCovers() = viewModelScope.launch(Dispatchers.IO) {
+        val lists = Store.playlists.value
+        fun missing(t: Track) = t.art.isEmpty() && t.key.startsWith("sp:") && !t.key.startsWith("sp:isrc")
+        val first = lists.flatMap { p -> p.tracks.asReversed().filter(::missing).take(4) }
+        val rest = lists.flatMap { p -> p.tracks.filter(::missing) }
+        val keys = (first + rest).map { it.key }.distinct()
+        for (batch in keys.chunked(24)) {
+            val found = batch.chunked(6).map { part -> async { part.associateWith { runCatching { Spotify.cover(it) }.getOrDefault("") } } }
+                .awaitAll().fold(emptyMap<String, String>()) { a, b -> a + b }.filterValues { it.isNotEmpty() }
+            Store.setArt(found)
+        }
+    }
+
     init {
         refreshLinks()
+        fillCovers()
         viewModelScope.launch { PlaybackService.error.collect { it?.let(::say) } }
     }
 

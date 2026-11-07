@@ -109,6 +109,17 @@ object Store {
 
     fun remember(tracks: Collection<Track>) = tracks.forEach { known[it.key] = it }
 
+    /** Covers found later (Spotify songs import without them), into every playlist that has the song. */
+    fun setArt(art: Map<String, String>) {
+        if (art.isEmpty()) return
+        playlists.update { lists ->
+            lists.map { p ->
+                if (p.tracks.none { it.art.isEmpty() && it.key in art }) p
+                else p.copy(tracks = p.tracks.map { t -> art[t.key]?.takeIf { t.art.isEmpty() }?.let { t.copy(art = it) } ?: t })
+            }
+        }
+    }
+
     // --- library -----------------------------------------------------------
 
     val liked: StateFlow<List<Playlist>> get() = playlists

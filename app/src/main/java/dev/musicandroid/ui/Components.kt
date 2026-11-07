@@ -86,9 +86,12 @@ private val lateArt = ConcurrentHashMap<String, String>()
 fun artOf(t: Track): String {
     if (t.art.isNotEmpty() || !t.key.startsWith("sp:") || t.key.startsWith("sp:isrc")) return t.art
     val v by produceState(lateArt[t.key].orEmpty(), t.key) {
+        // The state outlives a change of song: start from this song's cover, not the last one's.
+        value = lateArt[t.key].orEmpty()
         if (value.isEmpty()) value = withContext(Dispatchers.IO) { Spotify.cover(t.key) }.also {
             lateArt[t.key] = it
             Store.known[t.key]?.let { k -> if (k.art.isEmpty()) Store.known[t.key] = k.copy(art = it) }
+            if (it.isNotEmpty()) Store.setArt(mapOf(t.key to it))
         }
     }
     return v
