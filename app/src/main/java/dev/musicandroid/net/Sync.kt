@@ -2,6 +2,20 @@ package dev.musicandroid.net
 
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.work.Constraints
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
 import dev.musicandroid.data.Kind
 import dev.musicandroid.data.Playlist
 import dev.musicandroid.data.Show
@@ -159,6 +173,27 @@ object Sync {
                 delay(30_000)
             }
         }
+        // Android pauses the app once it's out of sight, so a job also syncs
+        // when it leaves the screen and every quarter hour after.
+        val work = WorkManager.getInstance(context)
+        val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        work.enqueueUniquePeriodicWork("sync", ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES).setConstraints(online).build())
+        Handler(Looper.getMainLooper()).post {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+                override fun onStop(owner: LifecycleOwner) {
+                    work.enqueueUniqueWork("sync-now", ExistingWorkPolicy.REPLACE,
+                        OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(online).build())
+                }
+            })
+        }
+    }
+
+    /** One round from the background job. */
+    fun runOnce(context: Context) {
+        Store.init(context)
+        if (!enabled) return
+        runCatching { syncLibrary() }.onFailure { status.value = it.message ?: "Couldn't reach the server" }
     }
 
     private fun state(): State {
@@ -200,7 +235,7 @@ object Sync {
     }
 
     /** One round, blocking. False if the library changed meanwhile (the next round sends that). */
-    private fun syncLibrary(): Boolean {
+    private fun syncLibrary(): Boolean = synchronized(this) {
         val base = runCatching { Store.json.decodeFromString(Base.serializer(), baseFile.readText()) }.getOrNull()
         val cur = state()
         val body = buildJsonObject {
@@ -248,5 +283,12 @@ object Sync {
         baseFile.writeText(Store.json.encodeToString(Base.serializer(), nb))
         status.value = "Synced"
         return true
+    }
+}
+
+class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        Sync.runOnce(applicationContext)
+        Result.success()
     }
 }
