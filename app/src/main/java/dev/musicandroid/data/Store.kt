@@ -65,6 +65,7 @@ object Store {
             }
             for (d in docs) watch(d)
             loaded = true
+            dev.musicandroid.net.Sync.start(context)
         }
     }
 
