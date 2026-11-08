@@ -73,7 +73,11 @@ object Sync {
         else t.copy(key = hashed(t.artist, t.title), uri = "", art = t.art.takeIf { it.startsWith("http") }.orEmpty())
 
     fun record(queue: List<Track>, index: Int, positionMs: Long, updated: Long) =
-        Record(updated, device, queue.map(::portable), index, positionMs)
+        fromStart(Record(updated, device, queue.map(::portable), index, positionMs))
+
+    /** Only podcast episodes carry their position; songs start over. */
+    private fun fromStart(r: Record) =
+        if (r.queue.getOrNull(r.index)?.key?.startsWith("ep:") == true) r else r.copy(positionMs = 0)
 
     /** Blocking; call off the main thread. */
     fun push(r: Record) {
@@ -93,7 +97,7 @@ object Sync {
                 resp.code == 204 -> null
                 resp.code == 401 -> throw IOException("The server doesn't know this key")
                 !resp.isSuccessful -> throw IOException("Server answered ${resp.code}")
-                else -> Store.json.decodeFromString(Record.serializer(), resp.body.string())
+                else -> fromStart(Store.json.decodeFromString(Record.serializer(), resp.body.string()))
             }
         }
     }.onSuccess { status.value = "Connected" }.onFailure { status.value = it.message ?: "Couldn't reach the server" }.getOrNull()
